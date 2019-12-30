@@ -259,8 +259,8 @@ Now, get the subtree of families only.
 amphibia_families_subtree <- rotl::tol_induced_subtree(amphibia_families$Amphibia$ott_id)
 ```
 ```{r, eval = TRUE, results= 'asis', warning= FALSE, error = TRUE, fig.height = 8}
-ape::plot.phylo(amphibia_families_subtree, cex = 0.5)
 amphibia_families_subtree
+ape::plot.phylo(amphibia_families_subtree, cex = 0.5)
 ```
 Awesome!
   
