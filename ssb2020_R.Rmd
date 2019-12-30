@@ -1,0 +1,283 @@
+---
+title: "SSB 2020 Workshop: Using the Open Tree of Life for your Research"
+subtitle: "Get a dated tree for your _taxa of interest_ (using R) with `datelife` and the Open Tree of Life"
+author: "Luna L. Sánchez-Reyes"
+date: "`r Sys.Date()`"
+output:
+    pdf_document
+header-includes: \usepackage{graphicx}
+graphics: yes
+vignette: >
+  %\VignetteIndexEntry{datelife package}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+  
+```{r setup, include = FALSE, warnings = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = ">",
+  eval = FALSE
+)
+library("datelife")
+data("opentree_chronograms")
+runtime <- attr(opentree_chronograms, "running_time")
+# for provisional testing:
+start_time <- Sys.time()
+Sys.sleep(10)
+end_time <- Sys.time()
+runtime <- end_time - start_time
+```
+
+# Requirements for this tutorial
+
+From R, install the packages `rotl`, `ape`, `devtools` and `stringr` with the function `install.packages()`, 
+and the package `datelife` with the function `install_github()`. 
+Load them into your workspace with `library()` or `require()`. 
+If you do not want to load the packages, you can call functions specifying their package using two colons and the syntax `package_name::function_name()`. 
+This implies more typing, but gives more clarity to reproduce the workflow later. So we will use that syntax for this tutorial.
+An exception to this are functions from packages that are "preloaded" (such as `library()` form `base` or `install.packages()`, from `utils`) that can be simply called by their name.
+
+```{r}
+install.packages(c("rotl", "ape", "devtools", "stringr"))
+library(rotl)
+library(devtools)
+library(stringr)
+devtools::install_github("phylotastic/datelife")
+library(datelife)
+```
+
+# Find your taxa in the Open Tree of Life Taxonomy
+
+Get the _ott ids_ for your taxa with `tnrs_match_names()`. This will generate a "match_names" object.
+```{r, eval = TRUE}
+my_taxa <- c("amphibians", "canis", "felis", "delphinidae", "spheniscidae")
+resolved_names <- rotl::tnrs_match_names(my_taxa)
+class(resolved_names)
+resolved_names
+```
+
+There are two ways to extract the _ott ids_ from a "match_names" object:
+```{r}
+rotl::ott_id(resolved_names) # as a list
+resolved_names$ott_id # as a vector
+```
+# Get an induced subtree for your set of taxa
+
+```{r, eval = TRUE, results = 'hide'}
+mytree <- rotl::tol_induced_subtree(resolved_names$ott_id)
+```
+```{r, eval = TRUE, results= 'asis', warning= FALSE, error = TRUE}
+ape::plot.phylo(mytree, cex = 1)
+```
+
+This is cool! 
+  
+Now, what if you want a synthetic tree containing some or all descendants from your taxa of interest?
+
+# Get a subtree of one taxon
+
+We can extract a subtree of all descendants of one taxon at a time using the function `tol_subtree()`. 
+
+Try to extract a subtree of all amphibians.
+Get the _ott id_ first. It is already stored in the `resolved_names` object, but you can run the function `tnrs_match_names()` again if you want.
+```{r, eval = TRUE}
+amphibia_ott_id <- resolved_names$ott_id[1] # extract the ott id from resolved_names
+# amphibia_ott_id <- rotl::tnrs_match_names("amphibians")$ott_id # OR run tnrs again
+```
+
+Now, extract the subtree from the Open Tree synthetic tree using `tol_subtree()`.
+```{r, eval = TRUE, results= 'hide', warning= FALSE}
+amphibia_subtree <- rotl::tol_subtree(ott_id = amphibia_ott_id)
+```
+```{r, eval = TRUE}
+amphibia_subtree
+```
+This is a large tree!
+
+Try to extract a subtree for the genus _Canis_. It should be way smaller!
+
+```{r, eval = TRUE}
+canis <- rotl::tnrs_match_names("canis")  # get the ott id of the genus Canis (dogs)
+canis
+```
+```{r, eval = TRUE, results= 'hide', warning= FALSE, error = TRUE}
+subtree <- rotl::tol_subtree(canis$ott_id) # get the subtree
+```
+
+Why am I getting an error saying that the _node id_ was not found and that my taxon is "broken"?? 
+Generally, this happens when phylogenetic information does not match taxonomic information. 
+For example, extinct lineages are sometimes phylogenetically included within the taxon but are taxonomically excluded, making the taxon appear as paraphyletic.
+On the browser, you can still get to the subtree. From R, you need to do something else first.
+
+# Get a subtree of a "broken" taxon
+
+There is a way to find out that the group is "broken" before trying to get the subtree and getting an error.
+```{r, eval = TRUE, results= 'hide', warning= FALSE, error = TRUE}
+rotl::is_in_tree(canis$ott_id)
+```
+We say that a taxon is not in the tree when its _ott id_ is not assigned to a node in the synthetic tree.
+This is the reason why we get an error when we try to get a subtree using the _ott id_.
+
+Then, how do I get a subtree of my "broken" taxon?
+There are some options.
+
+## a) Get a subtree using the _node id_ instead of the _ott id_
+`rotl` has a function that gets for you all info from the node containing a taxon. That includes the _node id_.
+```{r, eval = TRUE, warning= FALSE, error = TRUE}
+canis_node_info <- rotl::tol_node_info(canis$ott_id)
+canis_node_info
+```
+We can use that _node id_ to get a subtree with `tol_subtree()`
+```{r, eval = TRUE, results= 'hide', warning= FALSE, error = TRUE}
+canis_node_subtree <- rotl::tol_subtree(node_id = canis_node_info$node_id)
+```
+```{r, eval = TRUE, results= 'asis', warning= FALSE, error = TRUE, fig.height = 9}
+ape::plot.phylo(canis_node_subtree, cex = 0.5)
+```
+
+Nice! We got a subtree of 85 tips, containing all descendants from the node that also contains _Canis_.
+
+## b) Get an induced subtree of taxonomic children
+
+We can get the _ott ids_ of the taxonomic children of our taxon of interest and use the function `tol_induced_subtree()`.
+
+First, get the taxonomic children.
+```{r, eval = TRUE, results= 'hide', warning= FALSE, error = TRUE}
+canis_taxonomy <- rotl::taxonomy_subtree(canis$ott_id)
+```
+```{r, eval = TRUE, results= 'asis', warning= FALSE, error = TRUE}
+canis_taxonomy
+```
+Now, extract the _ott ids_.
+```{r, eval = TRUE, results= 'hide', warning= FALSE, error = TRUE}
+canis_taxonomy_ott_ids <- datelife::extract_ott_ids(x = canis_taxonomy$tip_label)
+```
+Try to get an induced subtree of _Canis_ taxonomic children.
+
+```{r, eval = TRUE, results = 'hide', warning= FALSE, error = TRUE}
+canis_taxonomy_subtree <- rotl::tol_induced_subtree(canis_taxonomy_ott_ids)
+```
+It is often not possible to get an induced subtree of all taxonomic children from a taxon, 
+because some of them are not in the tree.
+
+To verify which ones are giving us trouble, we can use the function `is_in_tree()` again.
+```{r, eval = TRUE, warning= FALSE, error = TRUE, results = 'hide'}
+canis_in_tree <- sapply(canis_taxonomy_ott_ids, rotl::is_in_tree)
+canis_taxonomy_ott_ids_intree <- canis_taxonomy_ott_ids[canis_in_tree]
+canis_taxonomy_subtree <- rotl::tol_induced_subtree(canis_taxonomy_ott_ids_intree)
+```
+```{r, eval = TRUE, results= 'asis', warning= FALSE, error = TRUE, fig.height = 6}
+ape::plot.phylo(canis_taxonomy_subtree, cex = 0.5)
+```
+There! We have a synthetic subtree (derived from phylogenetic information) containing only the taxonomic children of _Canis_.
+
+It is sometimes thought that flags can help to detect taxa that are not in the tree, but they can be misleading.
+Get the flags of _Canis_ taxonomic children.
+```{r, eval = TRUE, warning= FALSE, error = TRUE}
+canis_taxonomy_ott_ids_taxon_info <- rotl::taxonomy_taxon_info(canis_taxonomy_ott_ids)
+canis_taxonomy_ott_ids_taxon_info_flags <- rotl::flags(canis_taxonomy_ott_ids_taxon_info)
+in_tree <- sapply(canis_taxonomy_ott_ids, rotl::is_in_tree)
+flags_not_in_tree <- canis_taxonomy_ott_ids_taxon_info_flags[!in_tree]
+flags_not_in_tree <- unique(unlist(flags_not_in_tree))
+flags_in_tree <- canis_taxonomy_ott_ids_taxon_info_flags[in_tree]
+flags_in_tree <- unique(unlist(flags_in_tree))
+```
+```{r, eval = TRUE, warning= FALSE, error = TRUE}
+flags_not_in_tree 
+flags_in_tree
+```
+
+Some terms such as "infraspecific" and "extinct" are used to flag both taxa that are **not** in the tree and taxa that **are** in the tree.
+
+# Get a subtree of a rank
+
+We can use the function `tax_rank()` to extract all children at or belows the species level.
+First, get all ranks.
+```{r, eval = TRUE, results= 'hide', warning= FALSE, error = TRUE}
+canis_ranks <- rotl::tax_rank(canis_taxonomy_ott_ids_taxon_info)
+```
+Then, get your desired rank only.
+```{r, eval = TRUE}
+canis_species_index <- canis_ranks %in% "species"
+canis_species_in_tree <- canis_taxonomy_ott_ids[canis_species_index & canis_in_tree]
+```
+
+Get an induced subtree of these _ott ids_.
+```{r, eval = TRUE, results= 'hide', warning= FALSE, error = TRUE}
+canis_species_subtree <- rotl::tol_induced_subtree(canis_species_in_tree)
+```
+```{r, eval = TRUE}
+canis_species_subtree
+```
+```{r, eval = TRUE, results= 'asis', warning= FALSE, error = TRUE, fig.height = 6}
+ape::plot.phylo(canis_species_subtree, cex = 1)
+```
+
+What if we want to get all taxa of a taxonomic ranks above the species level?
+Try to get all amphibian families.
+
+Extract ott ids from tip labels of subtree of all amphibians.
+```{r, eval = TRUE, results= 'hide', warning= FALSE, error = TRUE}
+amphibia_ott_ids <- datelife::extract_ott_ids(x = amphibia_subtree$tip.label)
+```
+Get their taxon information. This might take about 10 minutes or so.
+```{r, eval = FALSE, results= 'hide', warning= FALSE, error = TRUE}
+amphibia_ott_ids_taxon_info <- rotl::taxonomy_taxon_info(amphibia_ott_ids)
+```
+
+We already know that all children of amphibia are in the tree. So we only need to extract the ones belonging to our desired rank.
+```{r, eval = FALSE, results= 'hide', warning= FALSE, error = TRUE}
+amphibia_ranks <- rotl::tax_rank(amphibia_ott_ids_taxon_info)
+unique(amphibia_ranks)
+# [[1]]
+# [1] "species"
+# 
+# [[2]]
+# [1] "subspecies"
+# 
+# [[3]]
+# [1] "no rank - terminal"
+```
+
+We have implemented a function to extract all taxa of a given rank. It is also sligthly faster.
+
+```{r, eval = TRUE, results= 'hide', warning= FALSE, error = TRUE}
+amphibia_ott_ids_families <- datelife::get_ott_children(ott_ids = amphibia_ott_ids, ott_rank = "family")
+```
+
+Now, get the subtree of families only.
+```{r, eval = TRUE, results= 'hide', warning= FALSE, error = TRUE}
+amphibia_families_subtree <- rotl::tol_induced_subtree(amphibia_ott_ids_families)
+```
+```{r, eval = TRUE, results= 'asis', warning= FALSE, error = TRUE, fig.height = 8}
+ape::plot.phylo(amphibia_families_subtree, cex = 0.5)
+amphibia_families_subtree
+```
+
+# Get branch length information for you taxa
+
+You can explore the studies supporting the synthetic tree, and find out which ones have branch lengths.
+
+In the package `datelife`, we have implemented a workflow that extracts all studies containing information from at least two taxa.
+It only works at the species level.
+
+```{r, eval = TRUE}
+apes <- c("Pongo", "Pan", "Gorilla", "Hoolock", "Homo")
+resolved_names <- rotl::tnrs_match_names(apes)
+```
+
+```{r, eval = TRUE}
+apes_dr <- datelife::get_datelife_result(resolved_names$unique_name, get_spp_from_taxon = TRUE)
+apes_dr
+```
+We have a list of matrices with time of lineage divergence data.
+
+We can summarize it.
+```{r, eval = TRUE}
+apes_phylo_median <-  datelife::summarize_datelife_result(apes_dr,summary_format = "phylo_median")
+apes_phylo_median
+```
+```{r, eval = TRUE, results= 'asis', warning= FALSE, error = TRUE, fig.height = 6}
+ape::plot.phylo(apes_phylo_median, cex = 1)
+````
