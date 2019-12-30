@@ -256,13 +256,14 @@ amphibia_families <- datelife::get_ott_children(ott_ids = amphibia_ott_id, ott_r
 ```
 Now, get the subtree of families only.
 ```{r, eval = TRUE, results= 'hide', warning= FALSE, error = TRUE}
-amphibia_families_subtree <- rotl::tol_induced_subtree(amphibia_families)
+amphibia_families_subtree <- rotl::tol_induced_subtree(amphibia_families$Amphibia$ott_id)
 ```
 ```{r, eval = TRUE, results= 'asis', warning= FALSE, error = TRUE, fig.height = 8}
 ape::plot.phylo(amphibia_families_subtree, cex = 0.5)
 amphibia_families_subtree
 ```
-
+Awesome!
+  
 # Get branch length information (proportional to time) for you taxa
 
 You can explore the studies supporting the synthetic tree, and find out which ones have branch lengths.
